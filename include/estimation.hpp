@@ -36,3 +36,6 @@ Eigen::Matrix4d se3ToSE3(Eigen::MatrixXd xi);
 // Note2: T_enu_sensor must be defined for point 0 (pc[:, 0])
 void removeMotionDistortion(Eigen::MatrixXd &pc, std::vector<float> &times, Eigen::Matrix4d T_enu_sensor,
     std::vector<double> gt);
+
+void getClosestKFrames(std::vector<float> loc, std::vector<std::vector<float>> &frame_loc, uint K,
+    std::vector<int> & closestK);

@@ -29,3 +29,11 @@ void save_transform(std::string path, Eigen::Matrix4d T);
 bool filter_on_time(std::string fname, std::vector<std::vector<int>> valid_times);
 
 void get_name_from_file(std::string file, std::string &name);
+
+template<typename T>
+void print_vec(std::vector<T> v) {
+    for (uint i = 0; i < v.size(); ++i) {
+        std::cout << v[i] << " ";
+    }
+    std::cout << std::endl;
+}

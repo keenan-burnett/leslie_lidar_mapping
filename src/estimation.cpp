@@ -1,6 +1,7 @@
 #include <iostream>
 #include <iomanip>
 #include "estimation.hpp"
+#include "nabo/nabo.h"
 
 Eigen::Matrix4d get_inverse_tf(Eigen::Matrix4d T) {
     Eigen::Matrix3d R = T.block(0, 0, 3, 3);
@@ -98,7 +99,9 @@ void removeMotionDistortion(Eigen::MatrixXd &pc, std::vector<float> &times, Eige
     varpi(5) = gt[10];
 
     // Compute T_undistort for several discrete points along the scan
-    int M = 100;
+    uint M = 100;
+    if (times.size() < M)
+        M = times.size();
     std::vector<Eigen::Matrix4d> T_undistort_vec(M);
     std::vector<float> delta_t_vec(M);
 
@@ -110,7 +113,7 @@ void removeMotionDistortion(Eigen::MatrixXd &pc, std::vector<float> &times, Eige
         if (delta_t > max_delta_t)
             max_delta_t = delta_t;
     }
-    for (int i = 0; i < M; ++i) {
+    for (uint i = 0; i < M; ++i) {
         delta_t_vec[i] = min_delta_t + i * (max_delta_t - min_delta_t) / M;
         T_undistort_vec[i] = se3ToSE3(varpi * delta_t_vec[i]);
     }
@@ -118,8 +121,42 @@ void removeMotionDistortion(Eigen::MatrixXd &pc, std::vector<float> &times, Eige
     for (uint i = 1; i < times.size(); ++i) {
         float delta_t = times[i] - t0;
         int idx = get_closest(delta_t_vec, delta_t);
-        // Eigen::MatrixXd T_undistort = get_inverse_tf(se3ToSE3(varpi * delta_t));
         pc.block(0, i, 4, 1) = T_undistort_vec[idx] * pc.block(0, i, 4, 1);
     }
     std::cout << "* Distortion removed" << std::endl;
+}
+
+void getClosestKFrames(std::vector<float> loc, std::vector<std::vector<float>> &frame_loc, uint K,
+    std::vector<int> & closestK) {
+    if (frame_loc.size() <= K) {
+        closestK.clear();
+        for (uint i = 0; i < frame_loc.size(); ++i) {
+            closestK.push_back(i);
+        }
+        return;
+    }
+    // copy vector to eigen matrix
+    Eigen::MatrixXf M = Eigen::MatrixXf::Zero(3, frame_loc.size());
+    const int kk = K;
+    for (uint i = 0; i < frame_loc.size(); ++i) {
+        M(0, i) = frame_loc[i][0];
+        M(1, i) = frame_loc[i][1];
+    }
+    // Query point: latest frame
+    Eigen::VectorXf q = Eigen::VectorXf::Zero(3);
+    q(0) = loc[0];
+    q(1) = loc[1];
+    // Create a KD-Tree for M
+    Nabo::NNSearchF* nns = Nabo::NNSearchF::createKDTreeLinearHeap(M);
+    // Find K nearest neighbors of the query
+    Eigen::VectorXi indices(kk);
+    Eigen::VectorXf dists(kk);
+    nns->knn(q, indices, dists, kk);
+    // Copy results to output vector
+    closestK = std::vector<int>(kk);
+    for (int i = 0; i < kk; i++) {
+        closestK[i] = indices(i);
+    }
+    // cleanup KD-tree
+    delete nns;
 }
