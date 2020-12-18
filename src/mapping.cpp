@@ -16,8 +16,8 @@ typedef PointMatcher<double> PM;
 typedef PM::DataPoints DP;
 using namespace PointMatcherSupport;  // NOLINT
 
-void getMapFrames(std::string root, std::vector<std::string> &frames) {
-    frames.clear();
+void getMapFrames(std::string root, std::vector<std::string> &frame_names) {
+    frame_names.clear();
     std::ifstream ifs;
     ifs.open(root + "map/frames.txt", std::ios::in);
     std::string line;
@@ -25,16 +25,16 @@ void getMapFrames(std::string root, std::vector<std::string> &frames) {
     while (std::getline(ifs, line)) {
         std::vector<std::string> parts;
         boost::split(parts, line, boost::is_any_of("."));
-        frames.push_back(root + "map/frames/" + parts[0] + ".ply");
+        frame_names.push_back(root + "map/frames/" + parts[0] + ".ply");
     }
 }
 
 void getSubMap(std::string root, std::vector<int> closestK, DP &submap){
-    std::vector<std::string> frames;
-    getMapFrames(root, frames);
-    submap = DP::load(frames[closestK[0]]);
+    std::vector<std::string> frame_names;
+    getMapFrames(root, frame_names);
+    submap = DP::load(frame_names[closestK[0]]);
     for (uint i = 1; i < closestK.size(); ++i) {
-        submap.concatenate(DP::load(frames[closestK[i]]));
+        submap.concatenate(DP::load(frame_names[closestK[i]]));
     }
 }
 
@@ -42,11 +42,11 @@ void generateFinalMap(std::string root, DP &map) {
     std::shared_ptr<PM::DataPointsFilter> ocTreeSubsample =
         PM::get().DataPointsFilterRegistrar.create("OctreeGridDataPointsFilter",
         {{"maxSizeByNode", "0.063"}, {"samplingMethod", "1"}});
-    std::vector<std::string> frames;
-    getMapFrames(root, frames);
-    map = DP::load(frames[0]);
-    for (uint i = 1; i < frames.size(); ++i) {
-        map.concatenate(DP::load(frames[i]));
+    std::vector<std::string> frame_names;
+    getMapFrames(root, frame_names);
+    map = DP::load(frame_names[0]);
+    for (uint i = 1; i < frame_names.size(); ++i) {
+        map.concatenate(DP::load(frame_names[i]));
     }
     map = ocTreeSubsample->filter(map);
 }
@@ -87,15 +87,6 @@ int main() {
         PM::get().DataPointsFilterRegistrar.create("RandomSamplingDataPointsFilter",
         {{"prob", toParam(0.65)}});
 
-    std::shared_ptr<PM::DataPointsFilter> densityFilter =
-        PM::get().DataPointsFilterRegistrar.create("SurfaceNormalDataPointsFilter",
-        {{"knn", "10"}, {"epsilon", "5"}, {"keepDensities", "1"}, {"keepNormals", "0"}});
-
-    std::shared_ptr<PM::DataPointsFilter> uniformSubsample =
-        PM::get().DataPointsFilterRegistrar.create(
-        "MaxDensityDataPointsFilter",
-        {{"maxDensity", toParam(4000)}});
-
     std::shared_ptr<PM::DataPointsFilter> ocTreeSubsample =
         PM::get().DataPointsFilterRegistrar.create("OctreeGridDataPointsFilter",
         {{"maxSizeByNode", "0.063"}, {"samplingMethod", "1"}});
@@ -105,7 +96,8 @@ int main() {
     Eigen::Matrix4d T_enu_map = Eigen::Matrix4d::Identity();
     bool t_enu_map_init = false;
     double prev_x = 0, prev_y = 0;
-    std::vector<std::vector<float>> frame_loc;
+    int prev_map = 0;
+    std::vector<std::vector<float>> frame_locs;
     uint retrieveK = 10;
 
     for (uint i = 0; i < lidar_files.size(); ++i) {
@@ -142,8 +134,8 @@ int main() {
 
         Eigen::Matrix4d T_enu_sensor = getTransformFromGT(gt);
         if (!t_enu_map_init) {
-            T_enu_map = T_enu_sensor;
-            // T_enu_map.block(0, 3, 3, 1) = T_enu_sensor.block(0, 3, 3, 1);
+            // T_enu_map = T_enu_sensor;
+            T_enu_map.block(0, 3, 3, 1) = T_enu_sensor.block(0, 3, 3, 1);
             save_transform(root + "map/T_enu_map.txt", T_enu_map);
             t_enu_map_init = true;
         }
@@ -160,11 +152,12 @@ int main() {
         get_name_from_file(lidar_files[i], fname);
 
         if (!map_init) {
-            map = newCloud;
+            map = rigidTrans->compute(newCloud, T_map_sensor);
             save_transform(root + "map/frame_poses/" + fname + ".txt", T_map_sensor);
             map_init = true;
             std::vector<float> loc = {0.0, 0.0};
-            frame_loc.push_back(loc);
+            frame_locs.push_back(loc);
+            map.save(root + "map/frames/" + fname + ".ply");
             continue;
         }
 
@@ -174,33 +167,31 @@ int main() {
         std::vector<float> loc = {float(T_map_sensor(0, 3)), float(T_map_sensor(1, 3))};
         // Get K closest frames to build submap
         std::vector<int> closestK;
-        getClosestKFrames(loc, frame_loc, retrieveK, closestK);
+        getClosestKFrames(loc, frame_locs, retrieveK, closestK);
         print_vec(closestK);
         DP submap;
         getSubMap(root, closestK, submap);
-        // Downsample to speed up ICP
-        submap = randSubsample->filter(submap);
+        submap = randSubsample->filter(submap);  // Downsample to speed up ICP
 
         T = icp(randSubsample->filter(newCloud), submap, prior);
 
         DP transformed = rigidTrans->compute(newCloud, T);
-        transformed.save(root + "map/frames/" + fname + ".ply");
         map.concatenate(transformed);
         save_transform(root + "map/frame_poses/" + fname + ".txt", T);
+        transformed.save(root + "map/frames/" + fname + ".ply");
         std::cout << "* Finished ICP" << std::endl;
 
-        // Downsample map
-        // map = densityFilter->filter(map);
-        // map = uniformSubsample->filter(map);
-        if (i % 20 == 0) {
+        // Downsample and save map
+        if (i - prev_map >= 25) {
             std::cout << "* Downsampling map" << std::endl;
             map = ocTreeSubsample->filter(map);
             std::cout << "* Saving map" << std::endl;
             map.save(root + "map/map.ply");
+            prev_map = i;
         }
         prev_x = gt[1];
         prev_y = gt[2];
-        frame_loc.push_back(loc);
+        frame_locs.push_back(loc);
         auto t2 = std::chrono::high_resolution_clock::now();
         std::chrono::duration<double> e = t2 - t1;
         std::cout << "* Frame time: " << e.count() << " seconds" << std::endl;
