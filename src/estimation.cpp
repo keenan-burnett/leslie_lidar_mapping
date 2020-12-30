@@ -117,7 +117,7 @@ void removeMotionDistortion(Eigen::MatrixXd &pc, std::vector<float> &times, Eige
         delta_t_vec[i] = min_delta_t + i * (max_delta_t - min_delta_t) / M;
         T_undistort_vec[i] = se3ToSE3(varpi * delta_t_vec[i]);
     }
-
+#pragma omp parallel
     for (uint i = 1; i < times.size(); ++i) {
         float delta_t = times[i] - t0;
         int idx = get_closest(delta_t_vec, delta_t);

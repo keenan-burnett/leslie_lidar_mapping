@@ -9,9 +9,6 @@
 #include "utils.hpp"
 #include "pointmatcher/PointMatcher.h"
 
-// #include "pointmap/pointmap.h"
-// #include "polar_processing/polar_processing.h"
-
 typedef PointMatcher<double> PM;
 typedef PM::DataPoints DP;
 using namespace PointMatcherSupport;  // NOLINT
@@ -55,14 +52,16 @@ int main() {
     // std::string root = "/media/keenan/autorontossd1/2020_11_05/";
     std::string root = "/home/keenan/Documents/data/boreas/2020_11_05/";
     std::vector<std::string> lidar_files;
+    std::vector<std::string> cam_files;
     get_file_names(root + "lidar/", lidar_files, "bin");
+    get_file_names(root + "camera/", cam_files, "png");
     std::string lidar_pose_file = root + "applanix/lidar_poses.csv";
     std::string camera_pose_file = root + "applanix/camera_poses.csv";
     std::vector<std::vector<int>> valid_times{{1604603469, 1604603598}, {1604603692, 1604603857},
         {1604603957, 1604604168}, {1604604278, 1604604445}};
     std::ofstream ofs;
     ofs.open(root + "map/frames.txt", std::ios::out);
-    ofs << "frame_name\n";
+    ofs << "frame,GTX,GTY\n";
     ofs.close();
 
     PM::ICP icp;
@@ -99,6 +98,8 @@ int main() {
     int prev_map = 0;
     std::vector<std::vector<float>> frame_locs;
     uint retrieveK = 10;
+    Eigen::Matrix4d P_cam = Eigen::Matrix4d::Identity();
+    load_transform(root + "calib/P_camera.txt", P_cam);
 
     for (uint i = 0; i < lidar_files.size(); ++i) {
         std::cout << i << " / " << lidar_files.size() - 1;
@@ -121,7 +122,7 @@ int main() {
         // This frame is being used, so add it to the list
         std::ofstream ofs;
         ofs.open(root + "map/frames.txt", std::ios::app);
-        ofs << lidar_files[i] << "\n";
+        ofs << lidar_files[i] << "," << gt[1] << "," << gt[2] << "\n";
         ofs.close();
         std::cout << " processing..." << std::endl;
         auto t1 = std::chrono::high_resolution_clock::now();
@@ -143,11 +144,12 @@ int main() {
 
         removeMotionDistortion(pc, times, T_enu_sensor, gt);
 
-        // todo: colorize points
-
-        Eigen::Matrix4d prior = T_map_sensor;
         DP newCloud = DP(pc, labels, intensities, desclabels);
         newCloud = removeScanner->filter(newCloud);
+
+        colorize_cloud(newCloud, T_enu_sensor, P_cam, lidar_files[i], cam_files, camera_pose_file, root);
+
+        Eigen::Matrix4d prior = T_map_sensor;
         std::string fname;
         get_name_from_file(lidar_files[i], fname);
 
