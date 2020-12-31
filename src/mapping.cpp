@@ -2,6 +2,7 @@
 #include <vector>
 #include <deque>
 #include <iostream>
+#include <iomanip>
 #include <fstream>
 #include <chrono>
 #include <boost/algorithm/string.hpp>
@@ -122,7 +123,7 @@ int main() {
         // This frame is being used, so add it to the list
         std::ofstream ofs;
         ofs.open(root + "map/frames.txt", std::ios::app);
-        ofs << lidar_files[i] << "," << gt[1] << "," << gt[2] << "\n";
+        ofs << lidar_files[i] << "," << std::setprecision(12) << gt[1] << "," << gt[2] << "\n";
         ofs.close();
         std::cout << " processing..." << std::endl;
         auto t1 = std::chrono::high_resolution_clock::now();
@@ -184,7 +185,7 @@ int main() {
         std::cout << "* Finished ICP" << std::endl;
 
         // Downsample and save map
-        if (i - prev_map >= 25) {
+        if (i - prev_map >= 10) {
             std::cout << "* Downsampling map" << std::endl;
             map = ocTreeSubsample->filter(map);
             std::cout << "* Saving map" << std::endl;
