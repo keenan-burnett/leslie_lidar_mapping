@@ -148,7 +148,7 @@ int main() {
         DP newCloud = DP(pc, labels, intensities, desclabels);
         newCloud = removeScanner->filter(newCloud);
 
-        // colorize_cloud(newCloud, T_enu_sensor, P_cam, lidar_files[i], cam_files, camera_pose_file, root);
+        colorize_cloud(newCloud, T_enu_sensor, P_cam, lidar_files[i], cam_files, camera_pose_file, root);
 
         Eigen::Matrix4d prior = T_map_sensor;
         std::string fname;
