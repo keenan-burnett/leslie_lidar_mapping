@@ -28,6 +28,8 @@ void getMapFrames(std::string root, std::vector<std::string> &frame_names) {
 }
 
 void getSubMap(std::string root, std::vector<int> closestK, DP &submap){
+    if (closestK.size() == 0)
+        return;
     std::vector<std::string> frame_names;
     getMapFrames(root, frame_names);
     submap = DP::load(frame_names[closestK[0]]);
@@ -97,7 +99,7 @@ int main() {
     double prev_x = 0, prev_y = 0;
     int prev_map = 0;
     std::vector<std::vector<float>> frame_locs;
-    uint retrieveK = 10;
+    uint retrieveK = 25;
     Eigen::Matrix4d P_cam = Eigen::Matrix4d::Identity();
     load_transform(root + "calib/P_camera.txt", P_cam);
 
@@ -171,11 +173,15 @@ int main() {
         std::vector<int> closestK;
         getClosestKFrames(loc, frame_locs, retrieveK, closestK);
         print_vec(closestK);
-        DP submap;
-        getSubMap(root, closestK, submap);
-        submap = randSubsample->filter(submap);  // Downsample to speed up ICP
 
-        T = icp(randSubsample->filter(newCloud), submap, prior);
+        if (closestK.size() > 0) {
+            DP submap;
+            getSubMap(root, closestK, submap);
+            submap = randSubsample->filter(submap);  // Downsample to speed up ICP
+            T = icp(randSubsample->filter(newCloud), submap, prior);
+        } else {
+            T = prior;
+        }
 
         DP transformed = rigidTrans->compute(newCloud, T);
         map.concatenate(transformed);
