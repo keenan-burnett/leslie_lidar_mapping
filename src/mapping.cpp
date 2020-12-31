@@ -50,8 +50,7 @@ void generateFinalMap(std::string root, DP &map) {
 }
 
 int main() {
-    std::string root = "/media/keenan/autorontossd1/2020_11_05/";
-    // std::string root = "/home/keenan/Documents/data/boreas/2020_11_05/";
+    std::string root = "/workspace/raid/krb/2020_11_05/";
     std::vector<std::string> lidar_files;
     std::vector<std::string> cam_files;
     get_file_names(root + "lidar/", lidar_files, "bin");
