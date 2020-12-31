@@ -201,7 +201,6 @@ void get_point_colors(DP pc, cv::Mat img, Eigen::Matrix4d P, Eigen::MatrixXd T_c
     uint H = img.size().height;
     uint W = img.size().width;
     point_colors = Eigen::MatrixXd::Zero(3, N);
-#pragma omp parallel
     for (uint i = 0; i < N; ++i) {
         Eigen::Vector4d xbar = pc.features.block(0, i, 4, 1);  // [x, y, z, 1]^T
         xbar = T_cam_lidar * xbar;

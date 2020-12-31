@@ -127,6 +127,7 @@ void removeMotionDistortion(Eigen::MatrixXd &pc, std::vector<float> &times, Eige
 
 void getClosestKFrames(std::vector<float> loc, std::vector<std::vector<float>> &frame_loc, uint K,
     std::vector<int> & closestK) {
+    double max_distance = K * 2.0;
     if (frame_loc.size() <= K) {
         closestK.clear();
         for (uint i = 0; i < frame_loc.size(); ++i) {
@@ -152,9 +153,10 @@ void getClosestKFrames(std::vector<float> loc, std::vector<std::vector<float>> &
     Eigen::VectorXf dists(kk);
     nns->knn(q, indices, dists, kk);
     // Copy results to output vector
-    closestK = std::vector<int>(kk);
+    closestK.clear();
     for (int i = 0; i < kk; i++) {
-        closestK[i] = indices(i);
+        if (dists(i) < max_distance)
+            closestK.push_back(indices(i));
     }
     // cleanup KD-tree
     delete nns;
