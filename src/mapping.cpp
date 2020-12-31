@@ -49,8 +49,8 @@ void generateFinalMap(std::string root, DP &map) {
 }
 
 int main() {
-    // std::string root = "/media/keenan/autorontossd1/2020_11_05/";
-    std::string root = "/home/keenan/Documents/data/boreas/2020_11_05/";
+    std::string root = "/media/keenan/autorontossd1/2020_11_05/";
+    // std::string root = "/home/keenan/Documents/data/boreas/2020_11_05/";
     std::vector<std::string> lidar_files;
     std::vector<std::string> cam_files;
     get_file_names(root + "lidar/", lidar_files, "bin");
@@ -147,7 +147,7 @@ int main() {
         DP newCloud = DP(pc, labels, intensities, desclabels);
         newCloud = removeScanner->filter(newCloud);
 
-        colorize_cloud(newCloud, T_enu_sensor, P_cam, lidar_files[i], cam_files, camera_pose_file, root);
+        // colorize_cloud(newCloud, T_enu_sensor, P_cam, lidar_files[i], cam_files, camera_pose_file, root);
 
         Eigen::Matrix4d prior = T_map_sensor;
         std::string fname;
