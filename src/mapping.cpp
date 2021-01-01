@@ -51,9 +51,11 @@ void generateFinalMap(std::string root, DP &map) {
     map = ocTreeSubsample->filter(map);
 }
 
-int main() {
-    std::string root = "/media/keenan/autorontossd1/2020_11_05/";
-    // std::string root = "/home/keenan/Documents/data/boreas/2020_11_05/";
+int main(int argc, const char *argv[]) {
+    std::string root, config;
+    if (validateArgs(argc, argv, root, config) != 0) {
+        return 1;
+    }
     std::vector<std::string> lidar_files;
     std::vector<std::string> cam_files;
     get_file_names(root + "lidar/", lidar_files, "bin");
@@ -68,7 +70,13 @@ int main() {
     ofs.close();
 
     PM::ICP icp;
-    icp.setDefault();
+    if (config.empty()) {
+        icp.setDefault();
+    } else {
+        std::ifstream ifs(config.c_str());
+        icp.loadFromYaml(ifs);
+    }
+
     DP::Labels labels;
     labels.push_back(DP::Label("x", 1));
     labels.push_back(DP::Label("y", 1));
@@ -82,16 +90,19 @@ int main() {
 
     std::shared_ptr<PM::DataPointsFilter> removeScanner =
         PM::get().DataPointsFilterRegistrar.create("MinDistDataPointsFilter",
-        {{"minDist", "1.5"}});
+        {{"minDist", "2.0"}});
 
-    // This filter will randomly remove 35% of the points.
     std::shared_ptr<PM::DataPointsFilter> randSubsample =
         PM::get().DataPointsFilterRegistrar.create("RandomSamplingDataPointsFilter",
-        {{"prob", toParam(0.65)}});
+        {{"prob", toParam(0.80)}});
 
-    std::shared_ptr<PM::DataPointsFilter> ocTreeSubsample =
-        PM::get().DataPointsFilterRegistrar.create("OctreeGridDataPointsFilter",
-        {{"maxSizeByNode", "0.063"}, {"samplingMethod", "1"}});
+    std::shared_ptr<PM::DataPointsFilter> densityFilter =
+        PM::get().DataPointsFilterRegistrar.create("SurfaceNormalDataPointsFilter",
+        {{"knn", "10"}, {"epsilon", "5"}, {"keepNormals", "0"}, {"keepDensities", "1"}});
+
+    std::shared_ptr<PM::DataPointsFilter> maxDensitySubsample =
+        PM::get().DataPointsFilterRegistrar.create("MaxDensityDataPointsFilter",
+        {{"maxDensity", toParam(4000)}});
 
     DP map;
     bool map_init = false;
@@ -123,10 +134,6 @@ int main() {
         }
 
         // This frame is being used, so add it to the list
-        std::ofstream ofs;
-        ofs.open(root + "map/frames.txt", std::ios::app);
-        ofs << lidar_files[i] << "," << std::setprecision(12) << gt[1] << "," << gt[2] << "\n";
-        ofs.close();
         std::cout << " processing..." << std::endl;
         auto t1 = std::chrono::high_resolution_clock::now();
 
@@ -152,11 +159,16 @@ int main() {
 
         // colorize_cloud(newCloud, T_enu_sensor, P_cam, lidar_files[i], cam_files, camera_pose_file, root);
 
+        // Use GPS as an initial guess (prior) for ICP
         Eigen::Matrix4d prior = T_map_sensor;
         std::string fname;
         get_name_from_file(lidar_files[i], fname);
 
         if (!map_init) {
+            std::ofstream ofs;
+            ofs.open(root + "map/frames.txt", std::ios::app);
+            ofs << lidar_files[i] << "," << std::setprecision(12) << gt[1] << "," << gt[2] << "\n";
+            ofs.close();
             map = rigidTrans->compute(newCloud, T_map_sensor);
             save_transform(root + "map/frame_poses/" + fname + ".txt", T_map_sensor);
             map_init = true;
@@ -166,34 +178,50 @@ int main() {
             continue;
         }
 
-        // Use GPS as an initial guess (prior) for ICP
-        std::cout << "* Starting ICP" << std::endl;
-
+        std::cout << "* ICP" << std::endl;
         std::vector<float> loc = {float(T_map_sensor(0, 3)), float(T_map_sensor(1, 3))};
+
         // Get K closest frames to build submap
         std::vector<int> closestK;
         getClosestKFrames(loc, frame_locs, retrieveK, closestK);
+        std::cout << "* Keyframes: ";
         print_vec(closestK);
 
+        T = prior;
         if (closestK.size() > 0) {
             DP submap;
             getSubMap(root, closestK, submap);
             submap = randSubsample->filter(submap);  // Downsample to speed up ICP
-            T = icp(randSubsample->filter(newCloud), submap, prior);
-        } else {
-            T = prior;
+            try {
+                T = icp(randSubsample->filter(newCloud), submap, prior);
+            } catch (PM::ConvergenceError& error) {
+                std::cout << "ERROR PM::ICP failed to converge: " << error.what() << std::endl;
+                continue;
+            }
+            double trans_error = 0, rot_error = 0;
+            poseError(T, prior, trans_error, rot_error);
+            if (trans_error > 0.10 || rot_error > 0.009) {
+                std::cout << "ERROR ICP differs from GT: " << trans_error << " " << rot_error << std::endl;
+            }
         }
 
         DP transformed = rigidTrans->compute(newCloud, T);
         map.concatenate(transformed);
+
+        // Save the new keyframe
+        std::ofstream ofs;
+        ofs.open(root + "map/frames.txt", std::ios::app);
+        ofs << lidar_files[i] << "," << std::setprecision(12) << gt[1] << "," << gt[2] << "\n";
+        ofs.close();
         save_transform(root + "map/frame_poses/" + fname + ".txt", T);
         transformed.save(root + "map/frames/" + fname + ".ply");
-        std::cout << "* Finished ICP" << std::endl;
+
+        std::cout << "* Downsampling map" << std::endl;
+        map = densityFilter->filter(map);
+        map = maxDensitySubsample->filter(map);
 
         // Downsample and save map
         if (i - prev_map >= 10) {
-            std::cout << "* Downsampling map" << std::endl;
-            map = ocTreeSubsample->filter(map);
             std::cout << "* Saving map" << std::endl;
             map.save(root + "map/map.ply");
             prev_map = i;

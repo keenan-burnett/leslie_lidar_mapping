@@ -52,3 +52,14 @@ void removeMotionDistortion(Eigen::MatrixXd &pc, std::vector<float> &times, Eige
 */
 void getClosestKFrames(std::vector<float> loc, std::vector<std::vector<float>> &frame_locs, uint K,
     std::vector<int> & closestK);
+
+/*!
+   \brief Calculates the translation and rotation difference between two 4x4 homogeneous transformations.
+        The two transformations should be doing the same thing, ex: T_map_sensor.
+*/
+void poseError(Eigen::Matrix4d T1, Eigen::Matrix4d T2, double &trans_error, double &rot_error);
+
+/*!
+   \brief Given a 3x3 rotation matrix, this function extracts 3-2-1 yaw-pitch-roll angles.
+*/
+void rotToYawPitchRoll(Eigen::Matrix3d C, double &yaw, double &pitch, double &roll);

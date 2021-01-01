@@ -48,6 +48,17 @@ void load_image(std::string path, cv::Mat &img);
 */
 bool get_groundtruth_data(std::string gtfile, std::string sensor_file, std::vector<double> &gt);
 
+// Same as the function above except for odometry files with the following format:
+// TIME1,TIME2,x,y,z,yaw,pitch,roll
+// Output vector contents: x,y,z,yaw,pitch,roll
+bool get_odom_data(std::string gtfile, std::string file1, std::string file2, std::vector<double> &gt);
+
+Eigen::Matrix3d roll(double r);
+
+Eigen::Matrix3d pitch(double p);
+
+Eigen::Matrix3d yaw(double y);
+
 /*!
    \brief Retrieve the 4x4 homogeneous transformation matrix from the line of groundtruth.
    \param gt Vector of ground truth information: GPSTime,x,y,z,vel_x,vel_y,vel_z,roll,pitch,heading,ang_vel_z
@@ -121,3 +132,8 @@ bool get_closest_frame(std::string src_file, std::vector<std::string> &tgt_files
 */
 void colorize_cloud(DP &cloud, Eigen::Matrix4d T_enu_lidar, Eigen::Matrix4d P_cam, std::string lidar_file,
     std::vector<std::string> &cam_files, std::string cam_pose_file, std::string root);
+
+/*!
+   \brief Load arguments from the command line and check their validity.
+*/
+int validateArgs(const int argc, const char *argv[], std::string &root, std::string &config);

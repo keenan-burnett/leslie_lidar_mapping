@@ -89,7 +89,6 @@ bool get_groundtruth_data(std::string gtfile, std::string sensor_file, std::vect
     std::ifstream ifs(gtfile);
     std::string line;
     gt.clear();
-    bool gtfound = false;
     std::getline(ifs, line);  // clear out the csv file header before searching
     while (std::getline(ifs, line)) {
         std::vector<std::string> parts;
@@ -98,26 +97,48 @@ bool get_groundtruth_data(std::string gtfile, std::string sensor_file, std::vect
             for (uint i = 1; i < parts.size(); ++i) {
                 gt.push_back(std::stod(parts[i]));
             }
-            gtfound = true;
-            break;
+            return true;
         }
     }
-    return gtfound;
+    return false;
 }
 
-static Eigen::Matrix3d roll(double r) {
+bool get_odom_data(std::string gtfile, std::string file1, std::string file2, std::vector<double> &gt) {
+    std::vector<std::string> farts;
+    boost::split(farts, file1, boost::is_any_of("."));
+    std::string time1 = farts[0];
+    boost::split(farts, file2, boost::is_any_of("."));
+    std::string time2 = farts[0];
+    std::ifstream ifs(gtfile);
+    std::string line;
+    gt.clear();
+    std::getline(ifs, line);  // clear out the csv file header
+    while (std::getline(ifs, lines)) {
+        std::vector<std::string> parts;
+        boost::split(parts, line, boost::is_any_of(","));
+        if (parts[0] == time1 && parts[1] == time2) {
+            for (uint i = 2; i < parts.size(); ++i) {
+                gt.push_back(std::stod(parts[i]));
+            }
+            return true;
+        }
+    }
+    return false;
+}
+
+Eigen::Matrix3d roll(double r) {
     Eigen::Matrix3d C1 = Eigen::Matrix3d::Identity();
     C1 << 1, 0, 0, 0, cos(r), sin(r), 0, -sin(r), cos(r);
     return C1;
 }
 
-static Eigen::Matrix3d pitch(double p) {
+Eigen::Matrix3d pitch(double p) {
     Eigen::Matrix3d C2 = Eigen::Matrix3d::Identity();
     C2 << cos(p), 0, -sin(p), 0, 1, 0, sin(p), 0, cos(p);
     return C2;
 }
 
-static Eigen::Matrix3d yaw(double y) {
+Eigen::Matrix3d yaw(double y) {
     Eigen::Matrix3d C3 = Eigen::Matrix3d::Identity();
     C3 << cos(y), sin(y), 0, -sin(y), cos(y), 0, 0, 0, 1;
     return C3;
@@ -271,5 +292,33 @@ void colorize_cloud(DP &cloud, Eigen::Matrix4d T_enu_lidar, Eigen::Matrix4d P_ca
     assert(cloud.descriptors.rows() >= point_colors.rows() + start_row &&
         cloud.descriptors.cols() == point_colors.cols());
     cloud.descriptors.block(start_row, 0, point_colors.rows(), point_colors.cols()) = point_colors;
-    std::cout << "* points colorized" << std::endl;
+}
+
+static void usage(const char *argv[]) {
+    std::cerr << std::endl << std::endl;
+    std::cerr << "* To build map:" << std::endl;
+    std::cerr << "  " << argv[0] << " --root ROOT_DIRECTORY --config CONFIG_FILE" << std::endl;
+    std::cerr << std::endl;
+    std::cerr << "--root ROOT_DIRECTORY  Absolute path to data, ex: /media/keenan/2020_11_05/" << std::endl;
+    std::cerr << "--config CONFIG_FILE   Absolute path to ICP YAML config file" << std::endl;
+    std::cerr << std::endl;
+}
+
+int validateArgs(const int argc, const char *argv[], std::string &root, std::string &config) {
+    if (argc <= 2) {
+        std::cerr << "Not enough arguments, usage:";
+        usage(argv);
+        return 1;
+    }
+    for (int i = 1; i <= argc - 2; i += 2) {
+        const std::string opt(argv[i]);
+        if (opt == "--config") {
+            config = argv[i + 1];
+        } else if (opt == "--root") {
+            root = argv[i + 1];
+        } else {
+            std::cerr << "Unknown option " << opt << ", usage:"; usage(argv); exit(1);
+        }
+    }
+    return 0;
 }
