@@ -113,7 +113,7 @@ bool get_odom_data(std::string gtfile, std::string file1, std::string file2, std
     std::string line;
     gt.clear();
     std::getline(ifs, line);  // clear out the csv file header
-    while (std::getline(ifs, lines)) {
+    while (std::getline(ifs, line)) {
         std::vector<std::string> parts;
         boost::split(parts, line, boost::is_any_of(","));
         if (parts[0] == time1 && parts[1] == time2) {

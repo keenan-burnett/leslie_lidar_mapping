@@ -1,6 +1,3 @@
-#include <string>
-#include <vector>
-#include <deque>
 #include <iostream>
 #include <iomanip>
 #include <fstream>

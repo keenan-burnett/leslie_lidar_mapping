@@ -59,6 +59,9 @@ target_link_libraries(${PROJECT_NAME}_odometry
 
 add_executable(batch_optimize_poses src/batch_optimize_poses.cpp)
 target_link_libraries(batch_optimize_poses
-	${DEPEND_LIBS}
-	${catkin_LIBRARIES}
+  utils
+  estimation
+  ${DEPEND_LIBS}
+  ${catkin_LIBRARIES}
+  ${libpointmatcher_LIBRARIES}
 )

@@ -1,6 +1,9 @@
 #include <iostream>
+#include <fstream>
 #include <lgmath.hpp>
 #include <steam.hpp>
+#include "estimation.hpp"
+#include "utils.hpp"
 
 struct RelMeas {
   unsigned int idxA;  // index of pose variable A
@@ -8,7 +11,7 @@ struct RelMeas {
   lgmath::se3::Transformation meas_T_BA;  // measured transform from A to B
 };
 
-int main(int argc, char *argv[]) {
+int main(int argc, const char *argv[]) {
     std::string root, config;
     if (validateArgs(argc, argv, root, config) != 0) {
         return 1;
@@ -34,7 +37,6 @@ int main(int argc, char *argv[]) {
         // GPSTime,x,y,z,vel_x,vel_y,vel_z,roll,pitch,heading,ang_vel_z
         assert(get_groundtruth_data(lidar_pose_file, lidar_files[i], gt));
         Eigen::Matrix4d T_enu_sensor = getTransformFromGT(gt);
-        removeMotionDistortion(pc, times, T_enu_sensor, gt);
         if (i == 0) {
             T_enu_map.block(0, 3, 3, 1) = T_enu_sensor.block(0, 3, 3, 1);
             save_transform(root + "map/T_enu_map.txt", T_enu_map);
@@ -44,7 +46,7 @@ int main(int argc, char *argv[]) {
         RelMeas meas;
         meas.idxA = i + 1;
         meas.idxB = 0;
-        meas.meas_T_BA = T_map_sensor;
+        meas.meas_T_BA = lgmath::se3::Transformation(T_map_sensor);
         measCollection.push_back(meas);
     }
 
@@ -62,7 +64,7 @@ int main(int argc, char *argv[]) {
         RelMeas meas;
         meas.idxA = i + 1;
         meas.idxB = i + 2;
-        meas.meas_T_BA = T;
+        meas.meas_T_BA = lgmath::se3::Transformation(T);
         measCollection.push_back(meas);
     }
 
@@ -144,7 +146,7 @@ int main(int argc, char *argv[]) {
         // GPSTime,x,y,z,vel_x,vel_y,vel_z,roll,pitch,heading,ang_vel_z
         assert(get_groundtruth_data(lidar_pose_file, lidar_files[i - 1], gt));
 
-        Eigen::Matrix4d T = poses[i]->getValue();
+        Eigen::Matrix4d T = poses[i]->getValue().matrix();
 
         double yaw = 0, pitch = 0, roll = 0;
         Eigen::Matrix3d C = T.block(0, 0, 3, 3);
