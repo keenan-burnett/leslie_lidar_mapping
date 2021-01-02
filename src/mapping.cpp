@@ -45,14 +45,16 @@ int main(int argc, const char *argv[]) {
     std::vector<std::string> cam_files;
     get_file_names(root + "lidar/", lidar_files, "bin");
     get_file_names(root + "camera/", cam_files, "png");
-    // std::string lidar_pose_file = root + "applanix/lidar_poses.csv";
+    std::string lidar_pose_file = root + "applanix/lidar_poses.csv";
     // std::string lidar_pose_file = root + "applanix/lidar_optimized_poses.csv";
-    std::string lidar_pose_file = root + "applanix/lidar_poses_ypr_ref2.csv";
+    // std::string lidar_pose_file = root + "applanix/lidar_poses_ypr_ref2.csv";
     std::string camera_pose_file = root + "applanix/camera_poses.csv";
-    // std::vector<std::vector<int>> valid_times{{1604603469, 1604603598}, {1604603692, 1604603857},
-    //     {1604603957, 1604604168}, {1604604278, 1604604445}};
-    std::vector<std::vector<int>> valid_times{{1604603505, 1604603478}, {1604603505, 1604603591},
-        {1604603813, 1604603694}, {1604603813, 1604603852}};
+
+    std::vector<std::vector<int>> valid_times{{1604603505, 1604603591},
+                                              {1604603813, 1604603852},
+                                              {1604604060, 1604604087},
+                                              {1604604393, 1604604438}};
+
     filterFrames(lidar_files, valid_times);
 
     std::ofstream ofs;
@@ -104,11 +106,6 @@ int main(int argc, const char *argv[]) {
 
     for (uint i = 0; i < lidar_files.size(); ++i) {
         std::cout << i << " / " << lidar_files.size() - 1;
-        // Filter out frames outside of the times of interest
-        if (!filter_on_time(lidar_files[i], valid_times)) {
-            std::cout << " skipping..." << std::endl;
-            continue;
-        }
         // Get the ground truth data for this frame
         std::vector<double> gt;
         // GPSTime,x,y,z,vel_x,vel_y,vel_z,roll,pitch,heading,ang_vel_z
@@ -204,7 +201,7 @@ int main(int argc, const char *argv[]) {
         transformed.save(root + "map/frames/" + fname + ".ply");
 
         // Downsample and save map
-        if (i - prev_map >= 25) {
+        if (i - prev_map >= 50) {
             std::cout << "* Downsampling map" << std::endl;
             map = ocTreeSubsample->filter(map);
             std::cout << "* Saving map" << std::endl;
