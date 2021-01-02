@@ -65,3 +65,11 @@ target_link_libraries(batch_optimize_poses
   ${catkin_LIBRARIES}
   ${libpointmatcher_LIBRARIES}
 )
+
+add_executable(ray_tracing src/ray_tracing.cpp)
+target_link_libraries(ray_tracing
+  utils
+  estimation
+  ${catkin_LIBRARIES}
+  ${libpointmatcher_LIBRARIES}
+)

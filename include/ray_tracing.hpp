@@ -1,5 +1,6 @@
 #include <Eigen/Dense>
 #include <string>
+#include <cstdarg>
 
 //-------------------------------------------------------------------------------------------
 //
@@ -48,9 +49,4 @@ struct hash<VoxKey>{
         return ret;
     }
 };
-
 }  // namespace std
-
-//-------------------------------------------------------------------------------------------
-
-void remove_movable_from_map(std::string root, std::string new_map_name);

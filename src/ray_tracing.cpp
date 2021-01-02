@@ -1,10 +1,17 @@
 // This ray-tracing code is adapted from Hugues Thomas' project.
 #include <math.h>
+#include <iostream>
+#include <unordered_map>
+#include <algorithm>
 #include <set>
 #include <cstdint>
 #include <cstdio>
 #include <ctime>
+#include <boost/algorithm/string.hpp>
 #include "ray_tracing.hpp"
+#include "estimation.hpp"
+#include "utils.hpp"
+#include "pointmatcher/PointMatcher.h"
 
 static Eigen::Vector3d max_point(Eigen::MatrixXd & pc) {
     Eigen::Vector3d maxP = Eigen::Vector3d::Zero();
@@ -74,10 +81,9 @@ static void compare_map_to_frame(Eigen::MatrixXd &aligned_frame, Eigen::MatrixXd
     VoxKey k0, k;
     for (uint i = 0; i < aligned_frame.cols(); ++i) {
         // Corresponding key
-        Eigen::Vector3d p = aligned_frame.block(0, i, 3, 1);
-        k0.x = (int)floor(p(0) * inv_map_dl);
-        k0.y = (int)floor(p(1) * inv_map_dl);
-        k0.z = (int)floor(p(2) * inv_map_dl);
+        k0.x = (int)floor(aligned_frame(0, i) * inv_map_dl);
+        k0.y = (int)floor(aligned_frame(1, i) * inv_map_dl);
+        k0.z = (int)floor(aligned_frame(2, i) * inv_map_dl);
         // Update the adjacent cells
         for (k.x = k0.x - 1; k.x < k0.x + 2; k.x++) {
             for (k.y = k0.y - 1; k.y < k0.y + 2; k.y++) {
@@ -113,7 +119,7 @@ static void compare_map_to_frame(Eigen::MatrixXd &aligned_frame, Eigen::MatrixXd
     size_t grid_n_phi = (size_t)floor((maxCorner(2) - originCorner(2)) / phi_dl) + 1;
 
     // Initialize variables
-    vector<float> frustrum_radiuses(grid_n_theta * grid_n_phi, -1.0);
+    std::vector<float> frustrum_radiuses(grid_n_theta * grid_n_phi, -1.0);
 
     // Fill the frustrum radiuses
     for (uint i = 0; i < polar_frame.cols(); ++i) {
@@ -146,28 +152,23 @@ static void compare_map_to_frame(Eigen::MatrixXd &aligned_frame, Eigen::MatrixXd
 
     // update free pixels
     float min_r = 2 * map_dl;
-    size_t p_i = 0;
     Eigen::Matrix3d C_sensor_map = T_sensor_map.block(0, 0, 3, 3);
 
     for (uint i = 0; i < map_points.size(); ++i) {
-        Eigen::Vector4d p = map_points.block(0, i, 4, 1);
         // Ignore points updated just now
-        if (!not_updated[p_i]) {
-            p_i++;
+        if (!not_updated[i])
             continue;
-        }
-
+        Eigen::Vector4d p = map_points.block(0, i, 4, 1);
         // Ignore points outside area of the frame
         if (p(0) > max_P(0) || p(1) > max_P(1) || p(2) > max_P(2) ||
             p(0) < min_P(0) || p(1) < min_P(1) || p(2) < min_P(2)) {
-            p_i++;
             continue;
         }
 
         // Align point in frame coordinates (and normal)
-        Eigen::Vector4d p_mat = T_sensor_map * p;
-        Eigen::Vector3d xyz = p_mat.block(0, 0, 3, 1);
-        Eigen::Vector3d nxyz = C_sensor_map * map_normals.block(0, p_i, 3, 1);
+        p = T_sensor_map * p;
+        Eigen::Vector3d xyz = p.block(0, 0, 3, 1);
+        Eigen::Vector3d nxyz = C_sensor_map * map_normals.block(0, i, 3, 1);
 
         // Project in polar coordinates
         Eigen::Vector3d rtp = cart2pol(xyz);
@@ -178,36 +179,38 @@ static void compare_map_to_frame(Eigen::MatrixXd &aligned_frame, Eigen::MatrixXd
         size_t gridIdx = i_theta + grid_n_theta * i_phi;
 
         // Update movable prob
-        if (rtp.x > min_r && rtp.x < frustrum_radiuses[gridIdx]) {
+        if (rtp(0) > min_r && rtp(0) < frustrum_radiuses[gridIdx]) {
             // Do not update if normal is horizontal and perpendicular to ray (to avoid removing walls)
             if (abs(nxyz(2)) > min_vert_cos) {
-                movable_counts[p_i] += 1;
-                movable_probs[p_i] += 1.0;
+                movable_counts[i] += 1;
+                movable_probs[i] += 1.0;
             } else {
-                float angle = acos(min(abs(xyz.dot(nxyz) / rtp(0)), 1.0f));
+                float angle = acos(std::min(abs(xyz.dot(nxyz) / rtp(0)), 1.0));
                 if (angle < max_angle) {
-                    movable_counts[p_i] += 1;
-                    movable_probs[p_i] += 1.0;
+                    movable_counts[i] += 1;
+                    movable_probs[i] += 1.0;
                 }
             }
         }
-        p_i++;
     }
 }
 
-static getNameFromPath(std::string path, std::string &name) {
+static void getNameFromPath(std::string path, std::string &name) {
     std::vector<std::string> parts;
-    boost::split(parts, line, boost::is_any_of("/"));
+    boost::split(parts, path, boost::is_any_of("/"));
     std::string endy_bit = parts[parts.size() - 1];
     boost::split(parts, endy_bit, boost::is_any_of("."));
     name = parts[0];
 }
 
-void remove_movable_from_map(std::string root, std::string new_map_name) {
+int main(int argc, const char *argv[]) {
+    std::string root, config;
+    std::string new_map_name = "map_no_movable.ply";
+    validateArgs(argc, argv, root, config);
     // Params:
     float map_dl = 0.15;
     float theta_dl = 1.29 * M_PI / 180;
-    float phi = 0.1 * M_PI / 180;
+    float phi_dl = 0.1 * M_PI / 180;
 
     // Init point map
     // todo: load points into a vector or modify code to use Eigen matrices directly.
@@ -219,16 +222,14 @@ void remove_movable_from_map(std::string root, std::string new_map_name) {
     map_samples.reserve(N);
     float inv_map_dl = 1.0 / map_dl;
     VoxKey k0;
-    size_t p_i = 0;
 
     for (uint i = 0; i < N; ++i) {
         k0.x = (int)floor(map.features(0, i) * inv_map_dl);
         k0.y = (int)floor(map.features(1, i) * inv_map_dl);
         k0.z = (int)floor(map.features(2, i) * inv_map_dl);
         if (map_samples.count(k0) < 1) {
-            map_samples.emplace(k0, p_i);
+            map_samples.emplace(k0, i);
         }
-        p_i++;
     }
 
     // Init map movable probabilities and counts
@@ -244,28 +245,26 @@ void remove_movable_from_map(std::string root, std::string new_map_name) {
     map = normalFilter->filter(map);
     std::cout << "Finished calculating normals" << std::endl;
     uint norm_row = map.getDescriptorStartingRow("normals");
+    Eigen::MatrixXd map_normals = map.descriptors.block(norm_row, 0, 3, N);
 
     // Start movable detection
 
-    size_t frame_i = 0;
     std::vector<std::string> frame_names;
     getMapFrames(root, frame_names);
 
     for (uint i = 0; i < frame_names.size(); ++i) {
+        std::cout << "Ray tracing frame " << i << " / " << frame_names.size() - 1 << std::endl;
         // Load frame / ply file
-        std::vector<PointXYZ> f_pts;
-        load_cloud(frame_names[i], f_pts);
         DP frame = DP::load(frame_names[i]);
-
+        // Load pose for this frame
         Eigen::Matrix4d T_map_sensor = Eigen::Matrix4d::Identity();
         std::string name;
         getNameFromPath(frame_names[i], name);
         load_transform(root + "map/frame_poses/" + name + ".txt", T_map_sensor);
         Eigen::Matrix4d T_sensor_map = get_inverse_tf(T_map_sensor);
-
-        compare_map_to_frame(frame.features, map.features, map.descriptors.block(norm_row, 0, 3, N), T_sensor_map,
+        // Perform ray-tracing to identity movable points
+        compare_map_to_frame(frame.features, map.features, map_normals, T_sensor_map,
             map_samples, theta_dl, phi_dl, map_dl, movable_probs, movable_counts);
-        std::cout << "Annotation step " << i << " / " << frame_names.size() - 1 << std::endl;
     }
 
     for (uint i = 0; i < movable_probs.size(); ++i) {
@@ -273,4 +272,21 @@ void remove_movable_from_map(std::string root, std::string new_map_name) {
         if (movable_counts[i] < 1e-6)
             movable_probs[i] = -1;
     }
+
+    std::cout << "Removing movable points from the map..." << std::endl;
+    uint feat_dim = map.features.rows();
+    map.removeDescriptor("normals");  // Get rid of normals
+    uint desc_dim = map.descriptors.rows();
+    uint j = 0;
+    for (uint i = 0; i < movable_probs.size(); ++i) {
+        if (movable_probs[i] > 0.7) {
+            map.features.block(0, j, feat_dim, 1) = map.features.block(0, i, feat_dim, 1);
+            map.descriptors.block(0, j, desc_dim, 1) = map.descriptors.block(0, i, desc_dim, 1);
+            j++;
+        }
+    }
+    map.conservativeResize(j);
+
+    std::cout << "Saving the filtered map..." << std::endl;
+    map.save(root + "map/" + new_map_name);
 }
