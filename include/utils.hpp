@@ -138,3 +138,5 @@ void colorize_cloud(DP &cloud, Eigen::Matrix4d T_enu_lidar, Eigen::Matrix4d P_ca
    \brief Load arguments from the command line and check their validity.
 */
 int validateArgs(const int argc, const char *argv[], std::string &root, std::string &config);
+
+void getMapFrames(std::string root, std::vector<std::string> &frame_names);

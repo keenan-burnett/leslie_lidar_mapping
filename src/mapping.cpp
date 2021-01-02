@@ -12,19 +12,6 @@ typedef PointMatcher<double> PM;
 typedef PM::DataPoints DP;
 using namespace PointMatcherSupport;  // NOLINT
 
-void getMapFrames(std::string root, std::vector<std::string> &frame_names) {
-    frame_names.clear();
-    std::ifstream ifs;
-    ifs.open(root + "map/frames.txt", std::ios::in);
-    std::string line;
-    std::getline(ifs, line);  // clear out the csv file header before searching
-    while (std::getline(ifs, line)) {
-        std::vector<std::string> parts;
-        boost::split(parts, line, boost::is_any_of("."));
-        frame_names.push_back(root + "map/frames/" + parts[0] + ".ply");
-    }
-}
-
 void getSubMap(std::string root, std::vector<int> closestK, DP &submap){
     if (closestK.size() == 0)
         return;

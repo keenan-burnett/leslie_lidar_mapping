@@ -352,3 +352,16 @@ int validateArgs(const int argc, const char *argv[], std::string &root, std::str
     }
     return 0;
 }
+
+void getMapFrames(std::string root, std::vector<std::string> &frame_names) {
+    frame_names.clear();
+    std::ifstream ifs;
+    ifs.open(root + "map/frames.txt", std::ios::in);
+    std::string line;
+    std::getline(ifs, line);  // clear out the csv file header before searching
+    while (std::getline(ifs, line)) {
+        std::vector<std::string> parts;
+        boost::split(parts, line, boost::is_any_of("."));
+        frame_names.push_back(root + "map/frames/" + parts[0] + ".ply");
+    }
+}
