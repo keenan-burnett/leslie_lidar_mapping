@@ -122,12 +122,11 @@ void removeMotionDistortion(Eigen::MatrixXd &pc, std::vector<float> &times, Eige
         int idx = get_closest(delta_t_vec, delta_t);
         pc.block(0, i, 4, 1) = T_undistort_vec[idx] * pc.block(0, i, 4, 1);
     }
-    std::cout << "* Distortion removed" << std::endl;
 }
 
 void getClosestKFrames(std::vector<float> loc, std::vector<std::vector<float>> &frame_loc, uint K,
     std::vector<int> & closestK) {
-    double max_distance = K * 2.0;
+    double max_distance = pow(300, 2);
     if (frame_loc.size() <= K) {
         closestK.clear();
         for (uint i = 0; i < frame_loc.size(); ++i) {
@@ -160,4 +159,44 @@ void getClosestKFrames(std::vector<float> loc, std::vector<std::vector<float>> &
     }
     // cleanup KD-tree
     delete nns;
+}
+
+void poseError(Eigen::Matrix4d T1, Eigen::Matrix4d T2, double &trans_error, double &rot_error) {
+    Eigen::Matrix4d Terr = get_inverse_tf(T1) * T2;
+    trans_error = sqrt(pow(Terr(0, 3), 2) + pow(Terr(1, 3), 2) + pow(Terr(2, 3), 2));
+    // std::cout << "x: " << Terr(0, 3) << " y: " << Terr(1, 3) << " z: " << Terr(2, 3) << std::endl;
+    double trace = 0;
+    for (uint i = 0; i < 3; ++i) {
+        trace += Terr(i, i);
+    }
+    rot_error = acos((trace - 1) / 2);
+}
+
+void rotToYawPitchRoll(Eigen::Matrix3d C, double &yaw, double &pitch, double &roll) {
+    double eps = 1.0e-15;
+    int i = 2, j = 1, k = 0;
+    double c_y = sqrt(pow(C(i, i), 2) + pow(C(j, i), 2));
+    if (c_y > eps) {
+        roll = atan2f(C(j, i), C(i, i));
+        pitch = atan2f(-C(k, i), c_y);
+        yaw = atan2f(C(k, j), C(k, k));
+    } else {
+        roll = 0;
+        pitch = atan2f(-C(k, i), c_y);
+        yaw = atan2f(-C(j, k), C(j, j));
+    }
+}
+
+void filterPointCloud(Eigen::MatrixXd &pc, double xmin, double xmax, double ymin, double ymax, double zmin,
+    double zmax) {
+    uint j = 0;
+    for (uint i = 0; i < pc.cols(); ++i) {
+        if (xmin <= pc(0, i) && pc(0, i) <= xmax &&
+            ymin <= pc(1, i) && pc(1, i) <= ymax &&
+            zmin <= pc(2, i) && pc(2, i) <= zmax) {
+            pc.block(0, j, 4, 1) = pc.block(0, i, 4, 1);
+            j++;
+        }
+    }
+    pc.conservativeResize(4, j);
 }
