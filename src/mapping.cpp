@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <iostream>
 #include <iomanip>
 #include <fstream>
@@ -35,19 +36,6 @@ void getSubMap(std::string root, std::vector<int> closestK, DP &submap){
     }
 }
 
-void generateFinalMap(std::string root, DP &map) {
-    std::shared_ptr<PM::DataPointsFilter> ocTreeSubsample =
-        PM::get().DataPointsFilterRegistrar.create("OctreeGridDataPointsFilter",
-        {{"maxSizeByNode", "0.063"}, {"samplingMethod", "1"}});
-    std::vector<std::string> frame_names;
-    getMapFrames(root, frame_names);
-    map = DP::load(frame_names[0]);
-    for (uint i = 1; i < frame_names.size(); ++i) {
-        map.concatenate(DP::load(frame_names[i]));
-    }
-    map = ocTreeSubsample->filter(map);
-}
-
 int main(int argc, const char *argv[]) {
     std::string root, config;
     if (validateArgs(argc, argv, root, config) != 0) {
@@ -57,10 +45,16 @@ int main(int argc, const char *argv[]) {
     std::vector<std::string> cam_files;
     get_file_names(root + "lidar/", lidar_files, "bin");
     get_file_names(root + "camera/", cam_files, "png");
-    std::string lidar_pose_file = root + "applanix/lidar_poses.csv";
+    // std::string lidar_pose_file = root + "applanix/lidar_poses.csv";
+    // std::string lidar_pose_file = root + "applanix/lidar_optimized_poses.csv";
+    std::string lidar_pose_file = root + "applanix/lidar_poses_ypr_ref2.csv";
     std::string camera_pose_file = root + "applanix/camera_poses.csv";
-    std::vector<std::vector<int>> valid_times{{1604603469, 1604603598}, {1604603692, 1604603857},
-        {1604603957, 1604604168}, {1604604278, 1604604445}};
+    // std::vector<std::vector<int>> valid_times{{1604603469, 1604603598}, {1604603692, 1604603857},
+    //     {1604603957, 1604604168}, {1604604278, 1604604445}};
+    std::vector<std::vector<int>> valid_times{{1604603505, 1604603478}, {1604603505, 1604603591},
+        {1604603813, 1604603694}, {1604603813, 1604603852}};
+    filterFrames(lidar_files, valid_times);
+
     std::ofstream ofs;
     ofs.open(root + "map/frames.txt", std::ios::out);
     ofs << "frame,GTX,GTY\n";
@@ -93,13 +87,9 @@ int main(int argc, const char *argv[]) {
         PM::get().DataPointsFilterRegistrar.create("RandomSamplingDataPointsFilter",
         {{"prob", toParam(0.80)}});
 
-    std::shared_ptr<PM::DataPointsFilter> densityFilter =
-        PM::get().DataPointsFilterRegistrar.create("SurfaceNormalDataPointsFilter",
-        {{"knn", "10"}, {"epsilon", "5"}, {"keepNormals", "0"}, {"keepDensities", "1"}});
-
-    std::shared_ptr<PM::DataPointsFilter> maxDensitySubsample =
-        PM::get().DataPointsFilterRegistrar.create("MaxDensityDataPointsFilter",
-        {{"maxDensity", toParam(4000)}});
+    std::shared_ptr<PM::DataPointsFilter> ocTreeSubsample =
+        PM::get().DataPointsFilterRegistrar.create("OctreeGridDataPointsFilter",
+        {{"maxSizeByNode", "0.063"}, {"samplingMethod", "1"}});
 
     DP map;
     bool map_init = false;
@@ -178,13 +168,13 @@ int main(int argc, const char *argv[]) {
         std::cout << "* ICP" << std::endl;
         std::vector<float> loc = {float(T_map_sensor(0, 3)), float(T_map_sensor(1, 3))};
 
+        T = prior;
+
         // Get K closest frames to build submap
         std::vector<int> closestK;
         getClosestKFrames(loc, frame_locs, retrieveK, closestK);
         std::cout << "* Keyframes: ";
         print_vec(closestK);
-
-        T = prior;
         if (closestK.size() > 0) {
             DP submap;
             getSubMap(root, closestK, submap);
@@ -198,7 +188,7 @@ int main(int argc, const char *argv[]) {
             double trans_error = 0, rot_error = 0;
             poseError(T, prior, trans_error, rot_error);
             if (trans_error > 0.10 || rot_error > 0.009) {
-                std::cout << "ERROR ICP differs from GT: " << trans_error << " " << rot_error << std::endl;
+                std::cout << "WARNING ICP differs from GT: " << trans_error << " " << rot_error << std::endl;
             }
         }
 
@@ -213,12 +203,10 @@ int main(int argc, const char *argv[]) {
         save_transform(root + "map/frame_poses/" + fname + ".txt", T);
         transformed.save(root + "map/frames/" + fname + ".ply");
 
-        std::cout << "* Downsampling map" << std::endl;
-        map = densityFilter->filter(map);
-        map = maxDensitySubsample->filter(map);
-
         // Downsample and save map
-        if (i - prev_map >= 10) {
+        if (i - prev_map >= 25) {
+            std::cout << "* Downsampling map" << std::endl;
+            map = ocTreeSubsample->filter(map);
             std::cout << "* Saving map" << std::endl;
             map.save(root + "map/map.ply");
             prev_map = i;

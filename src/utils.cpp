@@ -195,6 +195,36 @@ bool filter_on_time(std::string fname, std::vector<std::vector<int>> valid_times
     return keep;
 }
 
+void filterFrames(std::vector<std::string> &frames, std::vector<std::vector<int>> valid_times) {
+    std::vector<std::string> framesOut;
+    for (std::vector<int> valid_time : valid_times) {
+        std::vector<std::string> frames_temp;
+        assert(valid_time.size() == 2);
+        int t0 = valid_time[0];
+        int t1 = valid_time[1];
+        bool reverse = false;
+        if (valid_time[0] > valid_time[1]) {
+            t0 = valid_time[1];
+            t1 = valid_time[0];
+            reverse = true;
+        }
+        std::vector<std::vector<int>> vt;
+        vt.push_back({t0, t1});
+        for (uint i = 0; i < frames.size(); ++i) {
+            std::vector<std::string> parts;
+            boost::split(parts, frames[i], boost::is_any_of("."));
+            int time = std::stoll(parts[0]) / 1e9;
+            if (t0 <= time && time <= t1) {
+                frames_temp.push_back(frames[i]);
+            }
+        }
+        if (reverse)
+            std::reverse(frames_temp.begin(), frames_temp.end());
+        framesOut.insert(framesOut.end(), frames_temp.begin(), frames_temp.end());
+    }
+    frames = framesOut;
+}
+
 static void bilinear_interp(cv::Mat &img, Eigen::Vector4d ubar, Eigen::Vector3d &bgr) {
     bgr = Eigen::Vector3d::Zero();
     double u = ubar(0);

@@ -63,3 +63,6 @@ void poseError(Eigen::Matrix4d T1, Eigen::Matrix4d T2, double &trans_error, doub
    \brief Given a 3x3 rotation matrix, this function extracts 3-2-1 yaw-pitch-roll angles.
 */
 void rotToYawPitchRoll(Eigen::Matrix3d C, double &yaw, double &pitch, double &roll);
+
+void filterPointCloud(Eigen::MatrixXd &pc, double xmin, double xmax, double ymin, double ymax, double zmin,
+    double zmax);

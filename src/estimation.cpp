@@ -164,7 +164,7 @@ void getClosestKFrames(std::vector<float> loc, std::vector<std::vector<float>> &
 void poseError(Eigen::Matrix4d T1, Eigen::Matrix4d T2, double &trans_error, double &rot_error) {
     Eigen::Matrix4d Terr = get_inverse_tf(T1) * T2;
     trans_error = sqrt(pow(Terr(0, 3), 2) + pow(Terr(1, 3), 2) + pow(Terr(2, 3), 2));
-    std::cout << "x: " << Terr(0, 3) << " y: " << Terr(1, 3) << " z: " << Terr(2, 3) << std::endl;
+    // std::cout << "x: " << Terr(0, 3) << " y: " << Terr(1, 3) << " z: " << Terr(2, 3) << std::endl;
     double trace = 0;
     for (uint i = 0; i < 3; ++i) {
         trace += Terr(i, i);
@@ -185,4 +185,18 @@ void rotToYawPitchRoll(Eigen::Matrix3d C, double &yaw, double &pitch, double &ro
         pitch = atan2f(-C(k, i), c_y);
         yaw = atan2f(-C(j, k), C(j, j));
     }
+}
+
+void filterPointCloud(Eigen::MatrixXd &pc, double xmin, double xmax, double ymin, double ymax, double zmin,
+    double zmax) {
+    uint j = 0;
+    for (uint i = 0; i < pc.cols(); ++i) {
+        if (xmin <= pc(0, i) && pc(0, i) <= xmax &&
+            ymin <= pc(1, i) && pc(1, i) <= ymax &&
+            zmin <= pc(2, i) && pc(2, i) <= zmax) {
+            pc.block(0, j, 4, 1) = pc.block(0, i, 4, 1);
+            j++;
+        }
+    }
+    pc.conservativeResize(4, j);
 }

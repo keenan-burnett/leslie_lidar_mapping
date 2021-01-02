@@ -32,26 +32,31 @@ int main(int argc, const char *argv[]) {
 
     // Load in the absolute pose measurements from the GPS ground truth
     Eigen::Matrix4d T_enu_map = Eigen::Matrix4d::Identity();
-    for (uint i = 0; i < lidar_files.size(); ++i) {
+    // uint num_lidar = 9829;
+    uint num_lidar = 250;
+    uint start = 92;
+    for (uint i = start; i < start + num_lidar; ++i) {
+        std::cout << "loading abs: " << i << " / " << num_lidar - 1 << std::endl;
         std::vector<double> gt;
         // GPSTime,x,y,z,vel_x,vel_y,vel_z,roll,pitch,heading,ang_vel_z
         assert(get_groundtruth_data(lidar_pose_file, lidar_files[i], gt));
         Eigen::Matrix4d T_enu_sensor = getTransformFromGT(gt);
-        if (i == 0) {
+        if (i == start) {
             T_enu_map.block(0, 3, 3, 1) = T_enu_sensor.block(0, 3, 3, 1);
             save_transform(root + "map/T_enu_map.txt", T_enu_map);
         }
         Eigen::Matrix4d T_map_sensor = get_inverse_tf(T_enu_map) * T_enu_sensor;
         // Create absolute measurement
         RelMeas meas;
-        meas.idxA = i + 1;
+        meas.idxA = i + 1 - start;
         meas.idxB = 0;
         meas.meas_T_BA = lgmath::se3::Transformation(T_map_sensor);
         measCollection.push_back(meas);
     }
 
     // Load in the relative pose measurements from the LIDAR odometry results
-    for (uint i = 0; i < lidar_files.size() - 1; ++i) {
+    for (uint i = start; i < start + num_lidar - 1; ++i) {
+        std::cout << "loading rel: " << i << " / " << num_lidar - 1 << std::endl;
         std::vector<double> gt;
         // TIME1,TIME2,x,y,z,yaw,pitch,roll
         assert(get_odom_data(lidar_odom_file, lidar_files[i], lidar_files[i + 1], gt));
@@ -62,13 +67,12 @@ int main(int argc, const char *argv[]) {
         T.block(0, 0, 3, 3) = roll(gt[5]) * pitch(gt[4]) * yaw(gt[3]);
         // Create relative measurement
         RelMeas meas;
-        meas.idxA = i + 1;
-        meas.idxB = i + 2;
-        meas.meas_T_BA = lgmath::se3::Transformation(T);
+        meas.idxA = i + 1 - start;
+        meas.idxB = i + 2 - start;
+        meas.meas_T_BA = lgmath::se3::Transformation(get_inverse_tf(T));
         measCollection.push_back(meas);
     }
-
-    uint numPoses = lidar_files.size() + 1;  // One pose for each lidar frame and one for the map frame
+    uint numPoses = num_lidar + 1;  // One pose for each lidar frame and one for the map frame
 
     // steam state variables
     std::vector<steam::se3::TransformStateVar::Ptr> poses;
@@ -83,7 +87,12 @@ int main(int argc, const char *argv[]) {
     steam::ParallelizedCostTermCollection::Ptr costTerms(new steam::ParallelizedCostTermCollection());
 
     // Setup shared noise and loss functions
-    steam::BaseNoiseModel<6>::Ptr sharedNoiseModel(new steam::StaticNoiseModel<6>(Eigen::MatrixXd::Identity(6, 6)));
+    float rel_noise_factor = 0.0008;
+    float abs_noise_factor = 0.0004;
+    steam::BaseNoiseModel<6>::Ptr relNoiseModel(new steam::StaticNoiseModel<6>(rel_noise_factor *
+        Eigen::MatrixXd::Identity(6, 6)));
+    steam::BaseNoiseModel<6>::Ptr absNoiseModel(new steam::StaticNoiseModel<6>(abs_noise_factor *
+        Eigen::MatrixXd::Identity(6, 6)));
     steam::L2LossFunc::Ptr sharedLossFunc(new steam::L2LossFunc());
 
     // Lock first pose (otherwise entire solution is 'floating')
@@ -105,8 +114,14 @@ int main(int argc, const char *argv[]) {
         steam::TransformErrorEval::Ptr errorfunc(new steam::TransformErrorEval(meas_T_BA, stateVarB, stateVarA));
 
         // Create cost term and add to problem
+        steam::BaseNoiseModel<6>::Ptr noiseModel;
+        if (i < num_lidar) {
+            noiseModel = absNoiseModel;
+        } else {
+            noiseModel = relNoiseModel;
+        }
         steam::WeightedLeastSqCostTerm<6, 6>::Ptr cost(new steam::WeightedLeastSqCostTerm<6, 6>
-            (errorfunc, sharedNoiseModel, sharedLossFunc));
+            (errorfunc, noiseModel, sharedLossFunc));
         costTerms->add(cost);
     }
 
@@ -133,20 +148,31 @@ int main(int argc, const char *argv[]) {
     // Initialize parameters (enable verbose mode)
     SolverType::Params params;
     params.verbose = true;
+    params.maxIterations = 10000;
 
     // Make solver
     SolverType solver(&problem, params);
 
     // Optimize
+    std::cout << "optimizing..." << std::endl;
     solver.optimize();
 
+    std::cout << "writing output to file" << std::endl;
     ofs.open(lidar_opti_file, std::ios::app);
-    for (uint i = 1; i < numPoses; ++i) {
+    for (uint i = start + 1; i < start + numPoses; ++i) {
+        std::cout << "writing to file: " << i << " / " << num_lidar - 1 << std::endl;
         std::vector<double> gt;
         // GPSTime,x,y,z,vel_x,vel_y,vel_z,roll,pitch,heading,ang_vel_z
         assert(get_groundtruth_data(lidar_pose_file, lidar_files[i - 1], gt));
+        Eigen::Matrix4d T_enu_sensor = getTransformFromGT(gt);
+        Eigen::Matrix4d T_map_sensor = get_inverse_tf(T_enu_map) * T_enu_sensor;
 
-        Eigen::Matrix4d T = poses[i]->getValue().matrix();
+        Eigen::Matrix4d T = poses[i - start]->getValue().matrix();
+        T = get_inverse_tf(T);
+
+        double trans_error = 0, rot_error = 0;
+        poseError(T, T_map_sensor, trans_error, rot_error);
+        std::cout << "t_err: " << trans_error << " r_err: " << rot_error << std::endl;
 
         double yaw = 0, pitch = 0, roll = 0;
         Eigen::Matrix3d C = T.block(0, 0, 3, 3);

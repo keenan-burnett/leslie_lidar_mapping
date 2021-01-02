@@ -85,6 +85,7 @@ void load_transform(std::string path, Eigen::Matrix4d &T);
 */
 bool filter_on_time(std::string fname, std::vector<std::vector<int>> valid_times);
 
+void filterFrames(std::vector<std::string> &frames, std::vector<std::vector<int>> valid_times);
 
 /*!
    \brief Extracts the file name, ex: <timestamp> from <timestamp>.png
