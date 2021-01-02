@@ -185,7 +185,7 @@ static void compare_map_to_frame(Eigen::MatrixXd &aligned_frame, Eigen::MatrixXd
                 movable_counts[i] += 1;
                 movable_probs[i] += 1.0;
             } else {
-                float angle = acos(std::min(abs(xyz.dot(nxyz) / rtp(0)), 1.0));
+                float angle = acos(std::min(fabs(xyz.dot(nxyz) / rtp(0)), 1.0));
                 if (angle < max_angle) {
                     movable_counts[i] += 1;
                     movable_probs[i] += 1.0;
