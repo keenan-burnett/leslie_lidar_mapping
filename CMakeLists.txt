@@ -73,3 +73,11 @@ target_link_libraries(ray_tracing
   ${catkin_LIBRARIES}
   ${libpointmatcher_LIBRARIES}
 )
+
+add_executable(filter_movable src/filter_movable.cpp)
+target_link_libraries(filter_movable
+  utils
+  estimation
+  ${catkin_LIBRARIES}
+  ${libpointmatcher_LIBRARIES}
+)

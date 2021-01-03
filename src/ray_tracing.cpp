@@ -212,7 +212,6 @@ int main(int argc, const char *argv[]) {
     float phi_dl = 0.1 * M_PI / 180;
 
     // Init point map
-    // todo: load points into a vector or modify code to use Eigen matrices directly.
     std::cout << "Loading map..." << std::endl;
     DP map = DP::load(root + "map/map.ply");
     std::cout << "Finished loading map" << std::endl;
