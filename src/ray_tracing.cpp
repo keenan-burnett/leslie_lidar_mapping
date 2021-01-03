@@ -6,7 +6,6 @@
 #include <set>
 #include <cstdint>
 #include <cstdio>
-#include <ctime>
 #include <boost/algorithm/string.hpp>
 #include "ray_tracing.hpp"
 #include "estimation.hpp"
@@ -277,18 +276,19 @@ int main(int argc, const char *argv[]) {
     map.allocateDescriptor("movable", 1);
     uint movable_row = map.getDescriptorStartingRow("movable");
     for (uint i = 0; i < movable_probs.size(); ++i) {
-	map.descriptors(movable_row, i) = movable_probs[i];
+        map.descriptors(movable_row, i) = movable_probs[i];
     }
-    std::cout << "Adding movable descriptor to the existing map" << std::endl;
-    map.save(root + "map/map.ply"); 
+    std::cout << "Adding movable descriptor to the existing map..." << std::endl;
+    map.removeDescriptor("normals");  // Get rid of normals
+    map.save(root + "map/map.ply");
 
     std::cout << "Removing movable points from the map..." << std::endl;
     uint feat_dim = map.features.rows();
-    map.removeDescriptor("normals");  // Get rid of normals
+    map.removeDescriptor("movable");
     uint desc_dim = map.descriptors.rows();
     uint j = 0;
     for (uint i = 0; i < movable_probs.size(); ++i) {
-        if (movable_probs[i] < 0.9) {
+        if (movable_probs[i] < 0.8) {
             map.features.block(0, j, feat_dim, 1) = map.features.block(0, i, feat_dim, 1);
             map.descriptors.block(0, j, desc_dim, 1) = map.descriptors.block(0, i, desc_dim, 1);
             j++;
