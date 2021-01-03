@@ -154,7 +154,7 @@ static void compare_map_to_frame(Eigen::MatrixXd &aligned_frame, Eigen::MatrixXd
     float min_r = 2 * map_dl;
     Eigen::Matrix3d C_sensor_map = T_sensor_map.block(0, 0, 3, 3);
 
-    for (uint i = 0; i < map_points.size(); ++i) {
+    for (uint i = 0; i < map_points.cols(); ++i) {
         // Ignore points updated just now
         if (!not_updated[i])
             continue;
@@ -214,7 +214,9 @@ int main(int argc, const char *argv[]) {
 
     // Init point map
     // todo: load points into a vector or modify code to use Eigen matrices directly.
+    std::cout << "Loading map..." << std::endl;
     DP map = DP::load(root + "map/map.ply");
+    std::cout << "Finished loading map" << std::endl;
 
     // Create the pointmap voxels
     std::unordered_map<VoxKey, size_t> map_samples;
@@ -272,6 +274,13 @@ int main(int argc, const char *argv[]) {
         if (movable_counts[i] < 1e-6)
             movable_probs[i] = -1;
     }
+    map.allocateDescriptor("movable", 1);
+    uint movable_row = map.getDescriptorStartingRow("movable");
+    for (uint i = 0; i < movable_probs.size(); ++i) {
+	map.descriptors(movable_row, i) = movable_probs[i];
+    }
+    std::cout << "Adding movable descriptor to the existing map" << std::endl;
+    map.save(root + "map/map.ply"); 
 
     std::cout << "Removing movable points from the map..." << std::endl;
     uint feat_dim = map.features.rows();
@@ -279,7 +288,7 @@ int main(int argc, const char *argv[]) {
     uint desc_dim = map.descriptors.rows();
     uint j = 0;
     for (uint i = 0; i < movable_probs.size(); ++i) {
-        if (movable_probs[i] > 0.7) {
+        if (movable_probs[i] < 0.9) {
             map.features.block(0, j, feat_dim, 1) = map.features.block(0, i, feat_dim, 1);
             map.descriptors.block(0, j, desc_dim, 1) = map.descriptors.block(0, i, desc_dim, 1);
             j++;
