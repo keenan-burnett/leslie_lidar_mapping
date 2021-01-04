@@ -202,5 +202,6 @@ int main(int argc, const char *argv[]) {
         std::chrono::duration<double> e = t2 - t1;
         std::cout << "* Frame time: " << e.count() << " seconds" << std::endl;
     }
+    map = ocTreeSubsample->filter(map);
     map.save(root + "map/map.ply");
 }
